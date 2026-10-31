@@ -1,0 +1,9 @@
+.venv/
+.idea/
+.DS_Store
+__pycache__/
+*.pyc
+.ruff_cache/
+.pytest_cache/
+data/raw/
+data/processed/
