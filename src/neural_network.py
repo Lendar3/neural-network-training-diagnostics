@@ -1,6 +1,7 @@
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
+import time
 
 import numpy as np
 import torch
@@ -9,6 +10,7 @@ from sklearn.preprocessing import StandardScaler
 from torch import nn
 
 from src.plots import save_loss_plot, save_classification_plots
+from src.experiment import SEED, classification_metrics, save_metrics
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -21,16 +23,20 @@ def create_model():
 
 
 # Обучение нейросети с BCE, восстановление лучших весов и график
-def train_neural_network(X_train, Y_train, X_validation, Y_validation, learning_rate, epochs, rows, seed=12):
+def train_neural_network(X_train, Y_train, X_validation, Y_validation, learning_rate, epochs, metadata):
+    seed = SEED
+    rows = len(X_train)
+    start = time.perf_counter()
+    if not np.isfinite(learning_rate) or learning_rate <= 0 or epochs < 1:
+        raise ValueError("Use finite positive learning rate and epochs >= 1.")
     device = torch.device(
         "mps" if torch.backends.mps.is_available() else "cpu"
     )
 
-    # Scaler обучается только на выбранных строках, даже если rows = 1.
+    # Данные уже выбраны общим разбиением для baseline и сети.
     scaler = StandardScaler()
     # z = x - mean /sd
-    X_train = scaler.fit_transform(X_train[:rows])
-    Y_train = Y_train[:rows]
+    X_train = scaler.fit_transform(X_train)
     #z = x - mean / sd (mean and sd from x train)
     X_validation = scaler.transform(X_validation)
 
@@ -65,6 +71,8 @@ def train_neural_network(X_train, Y_train, X_validation, Y_validation, learning_
         logits = model(X_train_tensor)
         loss = loss_function(logits, Y_train_tensor)
 
+        if not torch.isfinite(loss):
+            raise ValueError("Training loss is NaN/Inf; check data and learning rate.")
         loss.backward()
         optimizer.step()
 
@@ -79,6 +87,8 @@ def train_neural_network(X_train, Y_train, X_validation, Y_validation, learning_
                 validation_logits, Y_validation_tensor
             )
 
+        if not torch.isfinite(train_loss) or not torch.isfinite(validation_loss):
+            raise ValueError("Evaluation loss is NaN/Inf; try a smaller learning rate.")
         train_losses.append(train_loss.item())
         validation_losses.append(validation_loss.item())
 
@@ -124,6 +134,9 @@ def train_neural_network(X_train, Y_train, X_validation, Y_validation, learning_
     if len(np.unique(Y_validation)) == 2:
         print("Validation ROC-AUC:", roc_auc_score(Y_validation.ravel(), probabilities.cpu().numpy().ravel()))
 
+    seconds = time.perf_counter() - start
+    metrics = classification_metrics(Y_validation, probabilities.cpu().numpy(), restored_loss.item())
+
     # Создаём папку и имя файла для этого запуска.
     WEIGHTS_DIR.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
@@ -134,7 +147,7 @@ def train_neural_network(X_train, Y_train, X_validation, Y_validation, learning_
     weights_path = WEIGHTS_DIR / f"{run_name}.npz"
 
     # Переносим лучшие веса с GPU на CPU и превращаем в массивы NumPy.
-    data_to_save = {}
+    data_to_save = dict(metadata)
     for name, weight in best_weights.items():
         weight_on_cpu = weight.cpu()
         data_to_save[name] = weight_on_cpu.numpy()
@@ -158,6 +171,17 @@ def train_neural_network(X_train, Y_train, X_validation, Y_validation, learning_
     data_to_save["validation_recall"] = recall
     data_to_save["validation_f1"] = f1
 
+    data_to_save["validation_roc_auc"] = metrics["roc_auc"]
+    data_to_save["validation_bce"] = metrics["bce"]
+    data_to_save["training_seconds"] = seconds
+    data_to_save["architecture"] = "28 -> 32 -> 16 -> 1"
+    data_to_save["optimizer"] = "Adam"
+    data_to_save["batch_size"] = rows
+    save_metrics(run_name, "neural_network", "validation", metrics, metadata,
+                 architecture="28 -> 32 -> 16 -> 1", optimizer="Adam", batch_size=rows,
+                 learning_rate=learning_rate, epochs=epochs, best_epoch=best_epoch,
+                 training_seconds=seconds)
+
     # ** передаёт содержимое словаря как именованные значения для NPZ-файла.
     np.savez(weights_path, **data_to_save)
     print("Weights saved:", weights_path)
@@ -174,10 +198,12 @@ def train_neural_network(X_train, Y_train, X_validation, Y_validation, learning_
 
 
 # Загружаем выбранную модель и оцениваем её без повторного обучения.
-def evaluate_neural_network(weights_path, X_test, Y_test):
+def evaluate_neural_network(weights_path, X_test, Y_test, metadata):
     device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
     model = create_model()
     with np.load(weights_path, allow_pickle=False) as saved:
+        if "split_id" not in saved or str(saved["split_id"]) != metadata["split_id"]:
+            raise ValueError("Model and selected data splits do not match (or legacy weights).")
         weights = {name: torch.from_numpy(saved[name]) for name in model.state_dict()}
         model.load_state_dict(weights)
         # Test преобразуем теми же mean и scale, что использовались при обучении.
@@ -210,3 +236,7 @@ def evaluate_neural_network(weights_path, X_test, Y_test):
     save_loss_plot(run_name, train_losses, validation_losses, best_epoch)
 
     save_classification_plots(run_name, labels, probabilities, "Test")
+
+    metrics = classification_metrics(labels, probabilities, test_loss)
+    save_metrics(run_name, "neural_network", "test", metrics, metadata)
+    return metrics
