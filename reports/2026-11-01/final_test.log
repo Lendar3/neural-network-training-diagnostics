@@ -1,0 +1,15 @@
+neural_network test
+BCE: 0.5368
+Accuracy: 0.7257
+Precision: 0.7395
+Recall: 0.7412
+F1: 0.7404
+ROC-AUC: 0.8031
+logistic_regression test
+BCE: 0.6431
+Accuracy: 0.6395
+Precision: 0.6365
+Recall: 0.7385
+F1: 0.6837
+ROC-AUC: 0.6788
+FINAL EVALUATION COMPLETE

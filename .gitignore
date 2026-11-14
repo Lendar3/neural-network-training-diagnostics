@@ -7,3 +7,8 @@ __pycache__/
 .pytest_cache/
 data/raw/
 data/processed/
+
+# Local secrets and data slices
+.env
+.env.*
+reports/**/selected_data.npz

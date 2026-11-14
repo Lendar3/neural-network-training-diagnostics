@@ -1,86 +1,66 @@
-# Diagnosing neural network training
+# Neural Network Training Diagnostics
 
-## Запуск
+A practical deep learning project on the HIGGS dataset: reproduce training problems, compare controlled configurations, and explain the results with learning curves and classification metrics.
 
-Из папки проекта: `.venv/bin/python main.py`.
-Данные должны находиться в `data/processed/higgs.npz` с массивами `X`, `Y`.
-Исходный CSV преобразуется существующим `src/data.py`.
+## Models and experiments
 
-1. Выбрать число **обучающих** строк через пункт 1.
-2. Обучить baseline через пункт 2.
-3. Обучить сеть через пункт 3. Для сравнения learning rate повторить пункт 3
-   с тремя значениями, сохраняя число эпох и выбранные данные.
-4. Выбрать конфигурацию по validation. Пункт 4 оценивает сохранённые сеть
-   и baseline на одинаковом test; baseline должен быть обучен на том же split.
+- Logistic regression baseline.
+- A PyTorch multilayer classifier: 28 → 32 → ReLU → 16 → ReLU → 1 (1,473 parameters).
+- Binary cross-entropy loss, full-batch Adam, and checkpoint selection by validation BCE.
+- Overfitting on a small training subset and insufficient training progress with a small learning rate.
+- A controlled comparison of learning rates 0.0001, 0.001, and 0.01 with the same data, seed and 300-update budget.
+- NumPy checkpoints containing model parameters, scaler values, settings and loss histories.
 
-Все новые запуски используют seed=12. Это фиксирует случайный выбор данных и
-инициализацию, но не гарантирует побитовое совпадение на другом оборудовании.
+## Results
 
-## Выбор объёма данных
+The November 1 experiment used 100,000 training events and proportional validation/test subsets. Configuration selection used validation BCE; the selected network and baseline were evaluated on the same 21,429 test events.
 
-Сначала весь исходный набор делится на непересекающиеся train/validation/test
-70/15/15 с seed=12 и стратификацией. Затем каждый раздел отдельно уменьшается
-с тем же seed и стратификацией. Примеры не перемещаются между разделами.
+| Model | Test BCE ↓ | Accuracy ↑ | F1 ↑ | ROC-AUC ↑ |
+|---|---:|---:|---:|---:|
+| Logistic regression | 0.6431 | 63.95% | 0.6837 | 0.6788 |
+| Neural network, lr=0.01 | 0.5368 | 72.57% | 0.7404 | 0.8031 |
 
-`validation_rows = round(full_validation_rows * rows / full_training_rows)`
-Аналогично вычисляется test. Из-за округления пропорции приблизительные.
+These results concern one split and seed. The test set had been inspected earlier in the project's history; this is not an untouched-holdout claim. See the [full Russian report](reports/2026-11-01/report_ru.md) for methods, limitations, hypotheses, metrics and evidence.
 
-| Train | Validation | Test | Доля train от 11 млн |
-|---:|---:|---:|---:|
-| 7 700 000 | 1 650 000 | 1 650 000 | 70% |
-| 3 850 000 | 825 000 | 825 000 | 35% |
-| 3 600 000 | 771 429 | 771 429 | 32.73% |
-| 300 | 64 | 64 | 0.00273% |
+![Training curves for three learning rates](reports/2026-11-01/assets/learning_rates.png)
 
-Минимум — 10 train-строк; каждый split должен содержать оба класса.
-Маленькие validation/test дают шумные метрики. Одинаковое число строк всегда
-выбирает одинаковые данные при неизменных исходном файле и окружении.
-Разные размеры подвыборок не обязаны быть вложенными.
-Scaler обучается только на выбранном train. Baseline и сеть получают один split.
+![Overfitting experiment](reports/2026-11-01/assets/overfitting.png)
 
-## Результаты
+## Run locally
 
-- `data/weights/logistic_*.npz`: коэффициенты baseline, scaler, метрики и split.
-- `data/weights/bce_*.npz`: лучшие веса сети, scaler, кривые, метрики и настройки.
-- `results/metrics.csv`: единая таблица validation/test BCE, ROC-AUC, accuracy,
-  precision, recall, F1. Положительный класс — 1, порог — 0.5.
-- `img/`: loss, ROC и confusion matrix.
+Python 3.10 or newer is recommended.
 
-Сеть остаётся full-batch Adam: одна эпоха = одно обновление весов.
-Веса выбираются по минимальной validation BCE; это checkpoint selection,
-а не досрочная остановка обучения. Время включает preprocessing и обучение;
-точное сравнение скорости требует одинакового оборудования.
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+```
 
-Файлы до изменения формата остаются историческими и не появляются в новом
-меню финальной оценки. У них validation/test не уменьшались вместе с train.
-Старые seed=13/14 сохранены честно, без переписывания метаданных.
-Для их запуска можно переключиться на исходную ветку.
-Не меняйте содержимое/порядок HIGGS между обучением и оценкой: идентификатор
-split фиксирует индексы и размеры, а не хеширует весь многогигабайтный датасет.
+Download the [HIGGS dataset from UCI](https://archive.ics.uci.edu/dataset/280/higgs). Each event has one binary target and 28 numerical features. The data describe simulated particle-collision events.
 
-## Что показать в отчёте
+Extract the downloaded CSV to `data/raw/HIGGS.csv`, then run:
 
-Нужны **две** проблемы, например underfitting и overfitting, и проверка исправлений.
-Для LR-эксперимента фиксировать rows, epochs, архитектуру и optimizer; менять
-только LR. Изменять epochs можно в отдельном эксперименте с фиксированным LR.
-На малом наборе удобно показать overfitting: train loss падает, validation растёт.
-Возврат лучшего checkpoint показывает уменьшение validation BCE; при желании
-отдельно проверить early stopping или регуляризацию.
-Полное повторение LR-эксперимента на меньшем наборе не является обязательным.
-Исторические результаты и результаты нового разбиения нельзя смешивать.
-Test используется после выбора модели, а не для подбора настроек.
+```bash
+mkdir -p data/raw data/processed
+python src/data.py
+python main.py
+```
 
-## Git: две версии
+The full dataset has 11 million rows and requires substantial RAM. The CSV conversion currently loads rows into Python lists before writing NumPy arrays. For an initial run, use a smaller CSV sample. Existing full-data NPZ files can be placed at `data/processed/higgs.npz`, with keys `X` and `Y`.
 
-Исходная версия: ветка `main`, тег `before-seed12-proportional-splits`.
-Новая версия: ветка `seed12-proportional-splits`.
+The interactive menu supports loading data and choosing a training size, fitting the baseline, training the neural network, and evaluating saved network/baseline pairs. The initial split is stratified 70/15/15 with seed 12. Smaller training selections use proportional prefixes of validation/test; scaling is fitted only on the selected training data. Model selection should use validation results.
 
-Вернуться к исходному коду: `git switch main`.
-Вернуться к новому: `git switch seed12-proportional-splits`.
-Перед переключением проверить `git status`; свои изменения сначала сохранить
-коммитом. Не использовать `reset --hard` для обычного переключения версий.
+The program uses Apple MPS when available and otherwise CPU.
 
-В Git сохранены исходные веса и графики. Датасет, виртуальное окружение,
-IDE-файлы и кэши исключены; они остаются на диске при переключении веток.
-Новые результаты нужно добавлять отдельным коммитом, когда они готовы.
-Репозиторий локальный; публикация в GitHub не выполнялась.
+## Files
+
+- `main.py`: menu, data selection and metric logging.
+- `src/data.py`: CSV → NumPy conversion.
+- `src/logistic_regression.py`: baseline training and evaluation.
+- `src/neural_network.py`: network training, checkpoints and evaluation.
+- `src/plots.py`: loss curves, confusion matrices and ROC curves.
+- `data/weights/`: saved model checkpoints.
+- `img/`: generated plots.
+- `reports/2026-11-01/`: experiment report, evidence and reproducibility scripts.
+
+Raw/processed datasets, the local experiment data slice, virtual environments and IDE files are excluded from version control. Some report scripts expect these local data files to reproduce the measurements.

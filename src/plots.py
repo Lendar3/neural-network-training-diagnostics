@@ -54,7 +54,6 @@ def save_classification_plots(run_name, labels, probabilities, split, folder="bc
         fig.tight_layout()
         fig.savefig(img_dir / f"{run_name}_{split.lower()}_roc_curve.png", dpi=150)
         plt.close(fig)
-    print("Plots saved:", img_dir)
 
 
 # Итоговые значения BCE logistic regression после fit().
@@ -69,4 +68,3 @@ def save_final_bce_plot(run_name, train_loss, validation_loss):
     fig.tight_layout()
     fig.savefig(img_dir / f"{run_name}_final_train_validation_bce.png", dpi=150)
     plt.close(fig)
-    print("Plots saved:", img_dir)
