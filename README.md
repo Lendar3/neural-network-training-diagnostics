@@ -20,11 +20,9 @@ The November 1 experiment used 100,000 training events and proportional validati
 | Logistic regression | 0.6431 | 63.95% | 0.6837 | 0.6788 |
 | Neural network, lr=0.01 | 0.5368 | 72.57% | 0.7404 | 0.8031 |
 
-These results concern one split and seed. The test set had been inspected earlier in the project's history; this is not an untouched-holdout claim. See the [full Russian report](reports/2026-11-01/report_ru.md) for methods, limitations, hypotheses, metrics and evidence.
+These results concern one split and seed. The test set had been inspected earlier in the project's history; this is not an untouched-holdout claim. Metrics from saved runs are available in [`results/metrics_slices.csv`](results/metrics_slices.csv).
 
-![Training curves for three learning rates](reports/2026-11-01/assets/learning_rates.png)
-
-![Overfitting experiment](reports/2026-11-01/assets/overfitting.png)
+Generated learning curves, confusion matrices and ROC curves are available in [`img/`](img/).
 
 ## Run locally
 
@@ -61,6 +59,5 @@ The program uses Apple MPS when available and otherwise CPU.
 - `src/plots.py`: loss curves, confusion matrices and ROC curves.
 - `data/weights/`: saved model checkpoints.
 - `img/`: generated plots.
-- `reports/2026-11-01/`: experiment report, evidence and reproducibility scripts.
 
-Raw/processed datasets, the local experiment data slice, virtual environments and IDE files are excluded from version control. Some report scripts expect these local data files to reproduce the measurements.
+Raw/processed datasets, personal notes, local reports, virtual environments and IDE files are excluded from version control.

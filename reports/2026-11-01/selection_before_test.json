@@ -1,9 +1,0 @@
-{
-  "criterion": "minimum validation BCE",
-  "selected_weights": "data/weights/bce_slice_20261101_063258_668959_rows100000_lr0.01_epochs300_seed12.npz",
-  "learning_rate": 0.01,
-  "best_epoch": 299,
-  "validation_bce": 0.5384131073951721,
-  "baseline_weights": "data/weights/logistic_slice_20261101_063252_692982_rows100000_seed12.npz",
-  "note": "Selection saved before this final test call. Historical test exposure disclosed in report."
-}

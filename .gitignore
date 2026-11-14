@@ -12,3 +12,7 @@ data/processed/
 .env
 .env.*
 reports/**/selected_data.npz
+
+# Personal notes and local reports
+подсказки.txt
+reports/2026-11-01/
